@@ -1,0 +1,523 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #18202b;
+  --muted: #667085;
+  --border: #d9dee7;
+  --primary: #246bfe;
+  --primary-dark: #174ed6;
+  --assistant: #ffffff;
+  --user: #eaf1ff;
+  --shadow: 0 10px 28px rgba(24, 32, 43, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(36, 107, 254, 0.14);
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.primary-button {
+  color: #fff;
+  background: var(--primary);
+}
+
+.primary-button:hover {
+  background: var(--primary-dark);
+}
+
+.secondary-button {
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.popup-shell {
+  width: 380px;
+}
+
+.popup-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.popup-actions,
+.config-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.config-panel[hidden] {
+  display: none;
+}
+
+.language-select {
+  width: 72px;
+  min-height: 32px;
+  flex: 0 0 72px;
+}
+
+.popup-header,
+.model-list-header,
+.button-row,
+.header-actions,
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-header,
+.model-list-header {
+  justify-content: space-between;
+}
+
+.model-list,
+.model-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.model-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fff;
+  text-align: left;
+}
+
+.model-list-item.active {
+  border-color: var(--primary);
+  background: #eaf1ff;
+}
+
+.model-edit-button {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font-weight: 700;
+}
+
+.model-edit-button span,
+.model-edit-button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-list-item small,
+.model-edit-button small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.model-active-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--primary);
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 12px;
+}
+
+.model-active-button:disabled {
+  color: #fff;
+  background: var(--primary);
+  opacity: 1;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.checkbox-label input {
+  width: auto;
+  min-height: 0;
+}
+
+.button-row > button {
+  flex: 1;
+}
+
+.popup-card h1,
+.panel-header h1 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.popup-card p,
+.panel-header p,
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sidepanel-shell {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  height: 100vh;
+  min-width: 320px;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.panel-title {
+  min-width: 0;
+}
+
+.panel-title h1,
+.panel-title p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.history-menu {
+  position: absolute;
+  top: 48px;
+  right: 10px;
+  z-index: 10;
+  width: min(330px, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.history-section-title {
+  padding: 10px 12px 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-list {
+  display: grid;
+}
+
+.session-item,
+.history-action {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 12px;
+  color: var(--text);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 500;
+}
+
+.session-item.active {
+  background: #dce9ff;
+  font-weight: 700;
+}
+
+.history-action {
+  border-top: 1px solid var(--border);
+}
+
+.context-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: #fbfcfe;
+  overflow-x: auto;
+}
+
+.context-bar span {
+  flex: 1 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tiny-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 12px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.messages {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.message {
+  width: fit-content;
+  max-width: 92%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}
+
+.message.user {
+  justify-self: end;
+  background: var(--user);
+}
+
+.message.assistant {
+  justify-self: start;
+  background: var(--assistant);
+}
+
+.message.pending {
+  color: var(--muted);
+}
+
+.message p,
+.message ul,
+.message ol,
+.message pre,
+.message blockquote,
+.message h2,
+.message h3,
+.message h4,
+.message h5,
+.message h6 {
+  margin: 0 0 10px;
+}
+
+.message p:last-child,
+.message ul:last-child,
+.message ol:last-child,
+.message pre:last-child,
+.message blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.message h2,
+.message h3,
+.message h4,
+.message h5,
+.message h6 {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.message ul,
+.message ol {
+  padding-left: 20px;
+}
+
+.message li + li {
+  margin-top: 4px;
+}
+
+.message pre {
+  max-width: 100%;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f3f5f8;
+}
+
+.message code {
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: #eef1f5;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+}
+
+.message pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+.message blockquote {
+  padding-left: 10px;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+}
+
+.message a {
+  color: var(--primary);
+}
+
+.ask-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.ask-form.compact {
+  padding: 8px;
+}
+
+.ask-form textarea {
+  min-height: 38px;
+  max-height: 132px;
+  border: 0;
+  box-shadow: none;
+  padding: 9px 4px;
+  resize: none;
+}
+
+.composer-row {
+  align-items: flex-end;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  background: #fff;
+}
+
+.composer-row textarea {
+  flex: 1;
+}
+
+.tool-button,
+.send-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: var(--text);
+  background: transparent;
+}
+
+.send-button {
+  color: #fff;
+  background: var(--primary);
+}
+
+.attachment-tray {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.attachment-chip {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 12px;
+}

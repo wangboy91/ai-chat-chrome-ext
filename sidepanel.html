@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Page Chat</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="sidepanel-shell">
+    <header class="panel-header">
+      <div class="panel-title">
+        <h1 id="sessionTitle">New chat</h1>
+        <p id="pageInfo">Waiting for current page</p>
+      </div>
+      <div class="header-actions">
+        <button id="newSession" class="icon-button" type="button" title="New chat">N</button>
+        <button id="toggleHistory" class="icon-button" type="button" title="Chat history">...</button>
+        <button id="refreshPage" class="icon-button" type="button" title="Refresh page content">R</button>
+      </div>
+    </header>
+
+    <aside id="historyMenu" class="history-menu" hidden>
+      <div id="historyTitle" class="history-section-title">Recent chats</div>
+      <div id="sessionList" class="session-list"></div>
+      <button id="deleteSession" class="history-action" type="button">Delete current chat</button>
+      <button id="openSettings" class="history-action" type="button">Settings and models</button>
+    </aside>
+
+    <section class="context-bar" aria-label="Page memory">
+      <span id="memoryStatus">Memory: 0 pages</span>
+      <button id="rememberCurrent" class="tiny-button" type="button">Add page</button>
+      <button id="rememberAllTabs" class="tiny-button" type="button">Add tabs</button>
+      <button id="clearMemory" class="tiny-button" type="button">Clear</button>
+    </section>
+
+    <main id="messages" class="messages" aria-live="polite"></main>
+
+    <form id="askForm" class="ask-form compact">
+      <div id="attachmentTray" class="attachment-tray" hidden></div>
+      <div class="composer-row">
+        <button id="uploadImage" class="tool-button" type="button" title="Upload image" hidden>+</button>
+        <textarea id="prompt" rows="1" placeholder="Ask this page"></textarea>
+        <button id="askButton" class="send-button" type="submit" title="Send">Send</button>
+      </div>
+      <input id="imageInput" type="file" accept="image/*" multiple hidden>
+    </form>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
