@@ -6,30 +6,32 @@ let language = "zh";
 
 const i18n = {
   zh: {
-    subtitle: "打开侧边栏或配置模型。",
-    open: "打开侧边栏",
-    config: "模型配置",
-    closeConfig: "收起配置",
-    models: "模型列表",
-    new: "新增",
-    name: "名称",
-    protocol: "协议",
-    model: "模型",
-    context: "上下文长度",
-    vision: "启用图片分析",
-    save: "保存模型",
-    activate: "启用此模型",
-    delete: "删除",
-    active: "当前启用",
-    draft: "新模型",
-    saved: "模型已保存",
-    activated: "模型已启用",
-    deleted: "模型已删除",
-    keepOne: "至少保留一个模型",
-    opened: "侧边栏已打开",
-    openFailed: "无法打开侧边栏"
+    title: "\u0041\u0049 \u9875\u9762\u52a9\u624b",
+    subtitle: "\u6253\u5f00\u4fa7\u8fb9\u680f\u6216\u914d\u7f6e\u6a21\u578b\u3002",
+    open: "\u6253\u5f00\u4fa7\u8fb9\u680f",
+    config: "\u6a21\u578b\u914d\u7f6e",
+    closeConfig: "\u6536\u8d77\u914d\u7f6e",
+    models: "\u6a21\u578b\u5217\u8868",
+    new: "\u65b0\u589e",
+    name: "\u540d\u79f0",
+    protocol: "\u534f\u8bae",
+    model: "\u6a21\u578b",
+    context: "\u4e0a\u4e0b\u6587\u957f\u5ea6",
+    vision: "\u542f\u7528\u56fe\u7247\u5206\u6790",
+    save: "\u4fdd\u5b58\u6a21\u578b",
+    activate: "\u542f\u7528\u6b64\u6a21\u578b",
+    delete: "\u5220\u9664",
+    active: "\u5f53\u524d\u542f\u7528",
+    draft: "\u65b0\u6a21\u578b",
+    saved: "\u6a21\u578b\u5df2\u4fdd\u5b58",
+    activated: "\u6a21\u578b\u5df2\u542f\u7528",
+    deleted: "\u6a21\u578b\u5df2\u5220\u9664",
+    keepOne: "\u81f3\u5c11\u4fdd\u7559\u4e00\u4e2a\u6a21\u578b",
+    opened: "\u4fa7\u8fb9\u680f\u5df2\u6253\u5f00",
+    openFailed: "\u65e0\u6cd5\u6253\u5f00\u4fa7\u8fb9\u680f"
   },
   en: {
+    title: "AI Page Chat",
     subtitle: "Open the side panel or configure models.",
     open: "Open side panel",
     config: "Model settings",
@@ -84,6 +86,7 @@ async function changeLanguage(event) {
 
 function applyLanguage() {
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  document.getElementById("popupTitle").textContent = t("title");
   document.getElementById("popupSubtitle").textContent = t("subtitle");
   document.getElementById("openSidePanel").textContent = t("open");
   document.getElementById("toggleConfig").textContent =
@@ -186,11 +189,8 @@ function createDraftModel() {
 async function saveModel() {
   const profile = readEditor();
   const index = profiles.findIndex((item) => item.id === profile.id);
-  if (index >= 0) {
-    profiles[index] = profile;
-  } else {
-    profiles.push(profile);
-  }
+  if (index >= 0) profiles[index] = profile;
+  else profiles.push(profile);
   editingModelId = profile.id;
   await chrome.storage.local.set({ modelProfiles: profiles, activeModelId });
   renderModelList();
@@ -211,9 +211,7 @@ async function deleteModel() {
     return;
   }
   profiles = profiles.filter((item) => item.id !== editingModelId);
-  if (activeModelId === editingModelId) {
-    activeModelId = profiles[0].id;
-  }
+  if (activeModelId === editingModelId) activeModelId = profiles[0].id;
   editingModelId = activeModelId;
   await chrome.storage.local.set({ modelProfiles: profiles, activeModelId });
   renderModelList();
@@ -262,9 +260,7 @@ function showStatus(message) {
   const status = document.getElementById("status");
   status.textContent = message;
   window.setTimeout(() => {
-    if (status.textContent === message) {
-      status.textContent = "";
-    }
+    if (status.textContent === message) status.textContent = "";
   }, 2500);
 }
 

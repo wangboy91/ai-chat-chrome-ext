@@ -39,6 +39,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
+
+  if (request.action === "askAIOnce") {
+    callAI(request.data, false)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 });
 
 async function handleAskAI(port, data) {

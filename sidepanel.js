@@ -32,6 +32,7 @@ const ui = {
     imagePrompt: "\u5206\u6790\u9644\u4ef6\u56fe\u7247\u3002",
     thinking: "\u601d\u8003\u4e2d...",
     noStream: "\u8bf7\u6c42\u5df2\u7ed3\u675f\uff0c\u4f46\u6ca1\u6709\u8fd4\u56de\u6d41\u5f0f\u6587\u672c\u3002",
+    fallback: "\u6d41\u5f0f\u8f93\u51fa\u6682\u65e0\u54cd\u5e94\uff0c\u6b63\u5728\u5207\u6362\u666e\u901a\u8bf7\u6c42...",
     timeout: "\u8bf7\u6c42\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5\u6a21\u578b\u5730\u5740\u3001API Key \u6216\u63a5\u53e3\u662f\u5426\u652f\u6301\u6d41\u5f0f\u8f93\u51fa\u3002",
     closed: "\u6d41\u5f0f\u8fde\u63a5\u5728\u8fd4\u56de\u6587\u672c\u524d\u5df2\u5173\u95ed\u3002",
     waitingChunk: "\u4ecd\u5728\u7b49\u5f85\u7b2c\u4e00\u6bb5\u6d41\u5f0f\u5185\u5bb9...",
@@ -65,6 +66,7 @@ const ui = {
     imagePrompt: "Analyze the attached image.",
     thinking: "Thinking...",
     noStream: "The request completed, but no stream text was returned.",
+    fallback: "No stream chunk yet. Falling back to a normal request...",
     timeout: "AI request timed out. Please check the model endpoint, API key, or streaming support.",
     closed: "The streaming connection closed before any text was returned.",
     waitingChunk: "Still waiting for the first stream chunk...",
@@ -140,6 +142,7 @@ function applyLanguage() {
   document.getElementById("newSession").title = t("newTitle");
   document.getElementById("toggleHistory").title = t("historyTitle");
   document.getElementById("refreshPage").title = t("refreshTitle");
+  renderActiveTitleOnly();
 }
 
 async function loadSessions() {
@@ -229,6 +232,12 @@ function renderActiveSession() {
     appendMessage(message.role, message.content, { markdown: message.role === "assistant" });
   }
   renderSessionList();
+}
+
+function renderActiveTitleOnly() {
+  const title = document.getElementById("sessionTitle");
+  if (!title || !sessions.length) return;
+  title.textContent = getDisplaySessionTitle(getActiveSession());
 }
 
 function getDisplaySessionTitle(session) {
@@ -494,8 +503,14 @@ function streamAnswer(data, node) {
   });
   activePort.postMessage({ action: "askAI", data });
   activeRequestTimer = window.setTimeout(() => {
-    if (!hasChunk && node.isConnected) renderMessage(node, t("waitingChunk"), true);
-  }, 12000);
+    if (!hasChunk && node.isConnected && activePort) {
+      renderMessage(node, t("fallback"), true);
+      const portToClose = activePort;
+      activePort = null;
+      portToClose.disconnect();
+      callNonStreamingFallback(data, node);
+    }
+  }, 6000);
   activeHardTimeout = window.setTimeout(() => {
     if (document.getElementById("askButton").disabled && node.isConnected) {
       renderMessage(node, hasChunk ? markdown : t("timeout"), true);
@@ -503,6 +518,24 @@ function streamAnswer(data, node) {
       finishStream();
     }
   }, 125000);
+}
+
+async function callNonStreamingFallback(data, node) {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: "askAIOnce", data });
+    if (!response?.ok) {
+      throw new Error(response?.error || t("noStream"));
+    }
+    const text = response.result || t("noStream");
+    renderMessage(node, text, true);
+    node.classList.remove("pending");
+    persistMessage("assistant", text);
+  } catch (error) {
+    renderMessage(node, error.message || t("timeout"), true);
+    node.classList.remove("pending");
+  } finally {
+    finishStream();
+  }
 }
 
 function finishStream() {
