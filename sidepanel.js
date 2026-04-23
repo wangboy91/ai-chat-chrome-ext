@@ -510,7 +510,7 @@ function streamAnswer(data, node) {
       portToClose.disconnect();
       callNonStreamingFallback(data, node);
     }
-  }, 6000);
+  }, 20000);
   activeHardTimeout = window.setTimeout(() => {
     if (document.getElementById("askButton").disabled && node.isConnected) {
       renderMessage(node, hasChunk ? markdown : t("timeout"), true);

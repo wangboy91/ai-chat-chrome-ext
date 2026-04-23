@@ -95,30 +95,24 @@ async function callAI(data, stream, onChunk) {
       throw new Error(`AI request timed out after ${Math.round((Number(config.requestTimeoutMs) || DEFAULTS.requestTimeoutMs) / 1000)} seconds.`);
     }
     throw error;
+  }
+
+  try {
+    if (!response.ok) {
+      const message = await readErrorMessage(response);
+      throw new Error(message || `AI request failed: ${response.status} (${url})`);
+    }
+
+    if (!stream) {
+      const text = await readNonStreamText(protocol, response);
+      return text;
+    }
+
+    await readStream(protocol, response, onChunk);
+    return "";
   } finally {
     clearTimeout(timeoutId);
   }
-
-  if (!response.ok) {
-    const message = await readErrorMessage(response);
-    throw new Error(message || `AI request failed: ${response.status} (${url})`);
-  }
-
-  if (!stream) {
-    const json = await response.json();
-    return extractText(protocol, json);
-  }
-
-  if (!isEventStream(response)) {
-    const text = await readNonStreamText(protocol, response);
-    if (text) {
-      onChunk(text);
-    }
-    return "";
-  }
-
-  await readStream(protocol, response, onChunk);
-  return "";
 }
 
 function validateConfig(config) {
@@ -249,10 +243,6 @@ async function readErrorMessage(response) {
   }
 }
 
-function isEventStream(response) {
-  return (response.headers.get("content-type") || "").toLowerCase().includes("text/event-stream");
-}
-
 async function readNonStreamText(protocol, response) {
   const raw = await response.text();
   if (!raw) {
@@ -282,6 +272,7 @@ async function readStream(protocol, response, onChunk) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let emitted = false;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -290,20 +281,31 @@ async function readStream(protocol, response, onChunk) {
     }
 
     buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    const parts = buffer.split(/\n\n+/);
-    buffer = parts.pop() || "";
-
-    for (const part of parts) {
-      const chunk = parseStreamFrame(protocol, part);
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      const chunk = parseStreamFrame(protocol, line);
       if (chunk) {
+        emitted = true;
         onChunk(chunk);
       }
+      newlineIndex = buffer.indexOf("\n");
     }
   }
 
+  buffer += decoder.decode();
   const tail = parseStreamFrame(protocol, buffer);
   if (tail) {
+    emitted = true;
     onChunk(tail);
+  }
+
+  if (!emitted && buffer.trim()) {
+    const text = parsePossibleJsonText(protocol, buffer);
+    if (text) {
+      onChunk(text);
+    }
   }
 }
 
@@ -335,6 +337,15 @@ function parseStreamFrame(protocol, raw) {
   }
 
   return output;
+}
+
+function parsePossibleJsonText(protocol, raw) {
+  try {
+    const json = JSON.parse(raw);
+    return extractText(protocol, json) || extractStreamText(protocol, json);
+  } catch {
+    return "";
+  }
 }
 
 function extractStreamText(protocol, json) {
