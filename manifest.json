@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "AI Page Chat",
-  "description": "Read the current page and chat with OpenAI or Anthropic models from the Chrome side panel.",
+  "name": "AI \u9875\u9762\u52a9\u624b",
+  "description": "\u8bfb\u53d6\u5f53\u524d\u9875\u9762\uff0c\u5e76\u5728 Chrome \u4fa7\u8fb9\u680f\u4e2d\u4e0e OpenAI \u6216 Anthropic \u6a21\u578b\u5bf9\u8bdd\u3002",
   "version": "1.0.0",
   "permissions": [
     "activeTab",
@@ -18,7 +18,7 @@
     "https://*/*"
   ],
   "action": {
-    "default_title": "AI Page Chat",
+    "default_title": "AI \u9875\u9762\u52a9\u624b",
     "default_popup": "popup.html"
   },
   "background": {
