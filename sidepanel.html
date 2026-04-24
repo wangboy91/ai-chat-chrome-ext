@@ -7,41 +7,47 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="sidepanel-shell">
+    <h1 id="sessionTitle" class="sr-only">New chat</h1>
     <header class="panel-header">
-      <div class="panel-title">
-        <h1 id="sessionTitle">New chat</h1>
-        <p id="pageInfo">Waiting for current page</p>
-      </div>
+      <div class="panel-spacer" aria-hidden="true"></div>
       <div class="header-actions">
-        <button id="newSession" class="icon-button" type="button" title="New chat">&#65291;</button>
+        <button id="newSession" class="icon-button" type="button" title="New chat">&#9998;</button>
         <button id="toggleHistory" class="icon-button" type="button" title="Chat history">&#8942;</button>
         <button id="refreshPage" class="icon-button" type="button" title="Refresh page content">&#8635;</button>
       </div>
     </header>
 
     <section id="pageChip" class="page-chip" hidden>
-      <span id="pageChipLabel" class="page-chip-label">Current tab</span>
-      <strong id="pageChipTitle">-</strong>
-      <span id="pageChipMeta"></span>
+      <div class="page-chip-row">
+        <div class="page-chip-copy">
+          <strong id="pageChipTitle">-</strong>
+          <span id="pageChipMeta"></span>
+        </div>
+        <button id="useCurrentPage" class="page-chip-action" type="button">Move here</button>
+      </div>
+      <p id="pageInfo" class="page-chip-info">Waiting for current page</p>
     </section>
 
     <aside id="historyMenu" class="history-menu" hidden>
       <div id="historyTitle" class="history-section-title">Recent chats</div>
       <div id="sessionList" class="session-list"></div>
+      <div class="history-section-title" id="memoryTitle">Memory</div>
+      <button id="rememberCurrent" class="history-action" type="button">Add page</button>
+      <button id="rememberAllTabs" class="history-action" type="button">Add tabs</button>
+      <button id="clearMemory" class="history-action" type="button">Clear</button>
+      <div id="memoryStatus" class="history-meta">Memory: 0 pages</div>
       <button id="deleteSession" class="history-action" type="button">Delete current chat</button>
       <button id="openSettings" class="history-action" type="button">Settings and models</button>
     </aside>
 
-    <section class="context-bar" aria-label="Page memory">
-      <span id="memoryStatus">Memory: 0 pages</span>
-      <button id="rememberCurrent" class="tiny-button" type="button">Add page</button>
-      <button id="rememberAllTabs" class="tiny-button" type="button">Add tabs</button>
-      <button id="clearMemory" class="tiny-button" type="button">Clear</button>
-    </section>
-
     <main id="messages" class="messages" aria-live="polite"></main>
 
     <form id="askForm" class="ask-form compact">
+      <div id="shareStrip" class="share-strip" hidden>
+        <span class="share-mark">B</span>
+        <span id="shareStatus" class="share-status">Sharing current tab</span>
+        <button id="clearSharedContext" class="share-close" type="button" title="Clear memory">&#215;</button>
+      </div>
       <div id="attachmentTray" class="attachment-tray" hidden></div>
       <div class="composer-row">
         <button id="uploadImage" class="tool-button" type="button" title="Upload image" hidden>+</button>

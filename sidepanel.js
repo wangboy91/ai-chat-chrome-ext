@@ -55,7 +55,10 @@ const ui = {
     currentTab: "\u5f53\u524d\u6807\u7b7e\u9875",
     sendShortcut: "\u53d1\u9001\u5feb\u6377\u952e",
     enterSend: "\u56de\u8f66\u53d1\u9001",
-    ctrlEnterSend: "Ctrl+Enter \u53d1\u9001"
+    ctrlEnterSend: "Ctrl+Enter \u53d1\u9001",
+    usePage: "\u79fb\u52a8\u5230\u6b64\u5904",
+    shareCurrent: "\u6b63\u5728\u5206\u4eab\u5f53\u524d\u6807\u7b7e\u9875",
+    clearShared: "\u6e05\u9664\u5171\u4eab\u8bb0\u5fc6"
   },
   en: {
     waiting: "Waiting for current page",
@@ -93,7 +96,10 @@ const ui = {
     currentTab: "Current tab",
     sendShortcut: "Send shortcut",
     enterSend: "Enter to send",
-    ctrlEnterSend: "Ctrl+Enter to send"
+    ctrlEnterSend: "Ctrl+Enter to send",
+    usePage: "Move here",
+    shareCurrent: "Sharing current tab",
+    clearShared: "Clear shared memory"
   }
 };
 
@@ -121,6 +127,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("rememberCurrent").addEventListener("click", rememberCurrentPage);
   document.getElementById("rememberAllTabs").addEventListener("click", rememberAllTabs);
   document.getElementById("clearMemory").addEventListener("click", clearMemory);
+  document.getElementById("clearSharedContext").addEventListener("click", clearMemory);
+  document.getElementById("useCurrentPage").addEventListener("click", useCurrentPage);
   document.getElementById("uploadImage").addEventListener("click", () => document.getElementById("imageInput").click());
   document.getElementById("imageInput").addEventListener("change", handleImageUpload);
   document.getElementById("sendShortcutSelect").addEventListener("change", updateSendShortcut);
@@ -158,14 +166,17 @@ function applyLanguage() {
   document.getElementById("rememberCurrent").textContent = t("addPage");
   document.getElementById("rememberAllTabs").textContent = t("addTabs");
   document.getElementById("clearMemory").textContent = t("clear");
+  document.getElementById("memoryTitle").textContent = t("memory");
   document.getElementById("prompt").placeholder = t("ask");
   document.getElementById("uploadImage").title = t("uploadTitle");
-  document.getElementById("askButton").textContent = t("send");
+  document.getElementById("askButton").textContent = "\u27a4";
   document.getElementById("askButton").title = t("send");
+  document.getElementById("askButton").setAttribute("aria-label", t("send"));
   document.getElementById("newSession").title = t("newTitle");
   document.getElementById("toggleHistory").title = t("historyTitle");
   document.getElementById("refreshPage").title = t("refreshTitle");
-  document.getElementById("pageChipLabel").textContent = t("currentTab");
+  document.getElementById("useCurrentPage").textContent = t("usePage");
+  document.getElementById("clearSharedContext").title = t("clearShared");
   document.getElementById("sendShortcutSelect").title = t("sendShortcut");
   const shortcutSelect = document.getElementById("sendShortcutSelect");
   if (shortcutSelect?.options[0]) shortcutSelect.options[0].text = t("enterSend");
@@ -427,6 +438,7 @@ async function rememberCurrentPage() {
   if (!currentPage) return;
   const memory = await readMemory();
   await writeMemory(upsertPage(memory, currentPage));
+  hideHistory();
 }
 
 async function rememberAllTabs() {
@@ -445,11 +457,13 @@ async function rememberAllTabs() {
   }
   const memory = await readMemory();
   await writeMemory(pages.reduce((items, page) => upsertPage(items, page), memory));
+  hideHistory();
 }
 
 async function clearMemory() {
   await chrome.storage.local.set({ [memoryKey]: [] });
   await updateMemoryStatus();
+  hideHistory();
 }
 
 async function readMemory() {
@@ -483,6 +497,7 @@ async function updateMemoryStatus() {
   const totalChars = memory.reduce((sum, page) => sum + (page.content || "").length, 0);
   document.getElementById("memoryStatus").textContent =
     `${t("memory")}: ${memory.length} ${t("pages")} - ${totalChars.toLocaleString()} ${t("chars")}`;
+  renderShareStrip(memory);
 }
 
 async function handleImageUpload(event) {
@@ -816,6 +831,7 @@ function setPageState(state, errorMessage = "") {
   pageReadError = errorMessage;
   renderPageInfo();
   renderPageChip();
+  renderShareStrip();
 }
 
 function renderPageInfo() {
@@ -846,12 +862,14 @@ function renderPageChip() {
   const info = currentPage || currentTabInfo;
   if (!info?.title && !info?.url) {
     chip.hidden = true;
+    renderShareStrip();
     return;
   }
   chip.hidden = false;
   titleNode.textContent = info.title || info.url || "-";
   const host = info.host || safeHost(info.url);
   metaNode.textContent = host || info.url || "";
+  renderShareStrip();
 }
 
 function safeHost(url) {
@@ -883,4 +901,30 @@ function syncActiveSessionTitle() {
   session.updatedAt = Date.now();
   saveSessions();
   renderActiveTitleOnly();
+}
+
+async function useCurrentPage() {
+  await refreshPageContent();
+  const session = getActiveSession();
+  if (!session.messages.length) {
+    session.title = getPreferredSessionTitle();
+    session.sourceUrl = currentPage?.url || currentTabInfo?.url || "";
+    session.updatedAt = Date.now();
+    await saveSessions();
+    renderActiveTitleOnly();
+  }
+}
+
+function renderShareStrip(memory = null) {
+  const strip = document.getElementById("shareStrip");
+  const status = document.getElementById("shareStatus");
+  if (!strip || !status) return;
+  const pages = Array.isArray(memory) ? memory : [];
+  const currentTitle = currentPage?.title || currentTabInfo?.title;
+  const label = currentTitle
+    ? `${t("shareCurrent")} "${currentTitle}"`
+    : t("shareCurrent");
+  const extra = pages.length ? ` + ${pages.length} ${t("pages")}` : "";
+  status.textContent = `${label}${extra}`;
+  strip.hidden = !currentTitle && !pages.length;
 }
