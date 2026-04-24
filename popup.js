@@ -2,7 +2,7 @@ const legacyFields = ["protocol", "apiKey", "model", "baseUrl", "maxContextChars
 let profiles = [];
 let activeModelId = "";
 let editingModelId = "";
-let language = "zh";
+let language = "en";
 
 const i18n = {
   zh: {
@@ -59,7 +59,7 @@ const i18n = {
 
 document.addEventListener("DOMContentLoaded", async () => {
   const stored = await chrome.storage.local.get("uiLanguage");
-  language = stored.uiLanguage || "zh";
+  language = stored.uiLanguage || "en";
   document.getElementById("language").value = language;
   applyLanguage();
   await loadProfiles();

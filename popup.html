@@ -1,44 +1,44 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AI &#39029;&#38754;&#21161;&#25163;</title>
+    <title>AI Page Chat</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="popup-shell">
     <main class="popup-card">
       <header class="popup-header">
         <div>
-          <h1 id="popupTitle">AI &#39029;&#38754;&#21161;&#25163;</h1>
-          <p id="popupSubtitle">&#25171;&#24320;&#20391;&#36793;&#26639;&#25110;&#37197;&#32622;&#27169;&#22411;&#12290;</p>
+          <h1 id="popupTitle">AI Page Chat</h1>
+          <p id="popupSubtitle">Open the side panel or configure models.</p>
         </div>
         <select id="language" class="language-select" title="Language">
-          <option value="zh">中文</option>
+          <option value="zh">&#20013;&#25991;</option>
           <option value="en">EN</option>
         </select>
       </header>
 
       <section class="popup-actions">
-        <button id="openSidePanel" class="primary-button" type="button">打开侧边栏</button>
-        <button id="toggleConfig" class="secondary-button" type="button">模型配置</button>
+        <button id="openSidePanel" class="primary-button" type="button">Open side panel</button>
+        <button id="toggleConfig" class="secondary-button" type="button">Model settings</button>
       </section>
 
       <section id="configPanel" class="config-panel" hidden>
         <div class="model-list-header">
-          <strong id="modelsTitle">模型列表</strong>
-          <button id="newModel" class="tiny-button" type="button">新增</button>
+          <strong id="modelsTitle">Models</strong>
+          <button id="newModel" class="tiny-button" type="button">New</button>
         </div>
         <div id="modelList" class="model-list"></div>
 
         <section class="model-editor">
           <label>
-            <span id="nameLabel">名称</span>
+            <span id="nameLabel">Name</span>
             <input id="profileName" type="text" placeholder="My Qwen model">
           </label>
 
           <label>
-            <span id="protocolLabel">协议</span>
+            <span id="protocolLabel">Protocol</span>
             <select id="protocol">
               <option value="openai">OpenAI / compatible</option>
               <option value="anthropic">Anthropic</option>
@@ -46,35 +46,35 @@
           </label>
 
           <label>
-            <span id="modelLabel">模型</span>
+            <span id="modelLabel">Model</span>
             <input id="model" type="text" placeholder="gpt-4o-mini">
           </label>
 
           <label>
-            API Key
+            <span>API Key</span>
             <input id="apiKey" type="password" autocomplete="off" placeholder="sk-...">
           </label>
 
           <label>
-            Base URL
+            <span>Base URL</span>
             <input id="baseUrl" type="url" placeholder="https://api.example.com/v1">
           </label>
 
           <div class="settings-row">
             <label>
-              <span id="contextLabel">上下文长度</span>
+              <span id="contextLabel">Context chars</span>
               <input id="maxContextChars" type="number" min="1000" step="1000" placeholder="18000">
             </label>
             <label class="checkbox-label">
               <input id="vision" type="checkbox">
-              <span id="visionLabel">启用图片分析</span>
+              <span id="visionLabel">Enable image analysis</span>
             </label>
           </div>
 
           <div class="button-row">
-            <button id="saveModel" class="primary-button" type="button">保存模型</button>
-            <button id="activateModel" class="secondary-button" type="button">启用此模型</button>
-            <button id="deleteModel" class="secondary-button" type="button">删除</button>
+            <button id="saveModel" class="primary-button" type="button">Save model</button>
+            <button id="activateModel" class="secondary-button" type="button">Use this model</button>
+            <button id="deleteModel" class="secondary-button" type="button">Delete</button>
           </div>
         </section>
       </section>

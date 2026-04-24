@@ -3,14 +3,18 @@ const sessionsKey = "chatSessions";
 const activeSessionKey = "activeSessionId";
 
 let currentPage = null;
+let currentTabInfo = null;
 let activePort = null;
 let activeRequestTimer = null;
 let activeHardTimeout = null;
+let pendingRefreshTimer = null;
 let sessions = [];
 let activeSessionId = "";
 let attachments = [];
-let language = "zh";
+let language = "en";
 let visionEnabled = false;
+let pageReadState = "idle";
+let pageReadError = "";
 
 const ui = {
   zh: {
@@ -45,7 +49,8 @@ const ui = {
     send: "\u53d1\u9001",
     newTitle: "\u65b0\u5efa\u5bf9\u8bdd",
     historyTitle: "\u67e5\u770b\u5386\u53f2\u5bf9\u8bdd",
-    refreshTitle: "\u91cd\u65b0\u8bfb\u53d6\u9875\u9762"
+    refreshTitle: "\u91cd\u65b0\u8bfb\u53d6\u9875\u9762",
+    currentTab: "\u5f53\u524d\u6807\u7b7e\u9875"
   },
   en: {
     waiting: "Waiting for current page",
@@ -79,19 +84,21 @@ const ui = {
     send: "Send",
     newTitle: "New chat",
     historyTitle: "Chat history",
-    refreshTitle: "Refresh page content"
+    refreshTitle: "Refresh page content",
+    currentTab: "Current tab"
   }
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
   const storedUi = await chrome.storage.local.get("uiLanguage");
-  language = storedUi.uiLanguage || "zh";
+  language = storedUi.uiLanguage || "en";
   applyLanguage();
   await loadSessions();
   await updateVisionControls();
-  await refreshPageContent();
   await updateMemoryStatus();
   renderActiveSession();
+  registerTabListeners();
+  scheduleRefresh(80);
 
   const prompt = document.getElementById("prompt");
   prompt.addEventListener("keydown", handlePromptKeydown);
@@ -112,7 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
   if (changes.uiLanguage) {
-    language = changes.uiLanguage.newValue || "zh";
+    language = changes.uiLanguage.newValue || "en";
     applyLanguage();
     updateMemoryStatus();
     renderActiveSession();
@@ -128,7 +135,6 @@ function t(key) {
 
 function applyLanguage() {
   document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
-  document.getElementById("pageInfo").textContent = t("waiting");
   document.getElementById("historyTitle").textContent = t("history");
   document.getElementById("deleteSession").textContent = t("deleteChat");
   document.getElementById("openSettings").textContent = t("settings");
@@ -142,6 +148,9 @@ function applyLanguage() {
   document.getElementById("newSession").title = t("newTitle");
   document.getElementById("toggleHistory").title = t("historyTitle");
   document.getElementById("refreshPage").title = t("refreshTitle");
+  document.getElementById("pageChipLabel").textContent = t("currentTab");
+  renderPageInfo();
+  renderPageChip();
   renderActiveTitleOnly();
 }
 
@@ -157,6 +166,7 @@ function createSession(title = t("newChat")) {
   return {
     id: crypto.randomUUID(),
     title,
+    sourceUrl: currentPage?.url || currentTabInfo?.url || "",
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -174,7 +184,7 @@ function getActiveSession() {
 }
 
 async function newSession() {
-  const session = createSession();
+  const session = createSession(getPreferredSessionTitle());
   sessions.unshift(session);
   activeSessionId = session.id;
   await saveSessions();
@@ -262,17 +272,23 @@ function autoResizePrompt(event) {
 }
 
 async function refreshPageContent() {
-  const pageInfo = document.getElementById("pageInfo");
-  pageInfo.textContent = t("reading");
+  setPageState("reading");
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    currentTabInfo = makeTabInfo(tab);
+    renderPageChip();
+    if (tab?.status && tab.status !== "complete") {
+      scheduleRefresh(500);
+    }
     currentPage = await readPageFromTab(tab);
-    const title = currentPage.title || tab.title || "Current page";
-    const length = (currentPage.content || "").length;
-    pageInfo.textContent = `${title} - ${length.toLocaleString()} ${t("chars")}`;
+    currentTabInfo = makeTabInfo(tab, currentPage);
+    syncActiveSessionTitle();
+    setPageState("ready");
   } catch (error) {
     currentPage = null;
-    pageInfo.textContent = error.message;
+    pageReadError = error.message || t("readFailed");
+    if (currentTabInfo?.status && currentTabInfo.status !== "complete") scheduleRefresh(700);
+    setPageState("error", pageReadError);
   }
 }
 
@@ -567,7 +583,8 @@ async function persistMessage(role, content, images = []) {
     createdAt: Date.now()
   });
   if (role === "user" && isUntitledSession(session.title)) {
-    session.title = content.slice(0, 32) || t("imageChat");
+    session.title = getPreferredSessionTitle() || content.slice(0, 32) || t("imageChat");
+    session.sourceUrl = currentPage?.url || currentTabInfo?.url || session.sourceUrl || "";
     document.getElementById("sessionTitle").textContent = session.title;
   }
   session.updatedAt = Date.now();
@@ -705,4 +722,125 @@ function clearActiveHardTimeout() {
     window.clearTimeout(activeHardTimeout);
     activeHardTimeout = null;
   }
+}
+
+function registerTabListeners() {
+  chrome.tabs.onActivated.addListener(() => {
+    scheduleRefresh(120);
+  });
+  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || tab.id !== tabId) return;
+    if (changeInfo.status === "loading" || changeInfo.title || changeInfo.url) {
+      currentTabInfo = makeTabInfo({ ...tab, ...changeInfo });
+      currentPage = null;
+      setPageState("reading");
+      renderPageChip();
+    }
+    if (changeInfo.status === "complete" || changeInfo.title || changeInfo.url) {
+      scheduleRefresh(180);
+    }
+  });
+}
+
+function scheduleRefresh(delay = 0) {
+  if (pendingRefreshTimer) {
+    window.clearTimeout(pendingRefreshTimer);
+  }
+  pendingRefreshTimer = window.setTimeout(() => {
+    pendingRefreshTimer = null;
+    refreshPageContent();
+  }, delay);
+}
+
+function makeTabInfo(tab, page = null) {
+  if (!tab) return null;
+  const url = page?.url || tab.url || "";
+  let host = "";
+  try {
+    host = url ? new URL(url).host : "";
+  } catch {
+    host = "";
+  }
+  return {
+    id: tab.id || 0,
+    title: page?.title || tab.title || "",
+    url,
+    host,
+    status: tab.status || "complete"
+  };
+}
+
+function setPageState(state, errorMessage = "") {
+  pageReadState = state;
+  pageReadError = errorMessage;
+  renderPageInfo();
+  renderPageChip();
+}
+
+function renderPageInfo() {
+  const pageInfo = document.getElementById("pageInfo");
+  if (!pageInfo) return;
+  if (pageReadState === "reading") {
+    pageInfo.textContent = t("reading");
+    return;
+  }
+  if (pageReadState === "error") {
+    pageInfo.textContent = pageReadError || t("readFailed");
+    return;
+  }
+  if (currentPage) {
+    const title = currentPage.title || currentTabInfo?.title || "Current page";
+    const length = (currentPage.content || "").length;
+    pageInfo.textContent = `${title} - ${length.toLocaleString()} ${t("chars")}`;
+    return;
+  }
+  pageInfo.textContent = t("waiting");
+}
+
+function renderPageChip() {
+  const chip = document.getElementById("pageChip");
+  const titleNode = document.getElementById("pageChipTitle");
+  const metaNode = document.getElementById("pageChipMeta");
+  if (!chip || !titleNode || !metaNode) return;
+  const info = currentPage || currentTabInfo;
+  if (!info?.title && !info?.url) {
+    chip.hidden = true;
+    return;
+  }
+  chip.hidden = false;
+  titleNode.textContent = info.title || info.url || "-";
+  const host = info.host || safeHost(info.url);
+  metaNode.textContent = host || info.url || "";
+}
+
+function safeHost(url) {
+  try {
+    return url ? new URL(url).host : "";
+  } catch {
+    return "";
+  }
+}
+
+function getPreferredSessionTitle() {
+  return currentPage?.title || currentTabInfo?.title || t("newChat");
+}
+
+function syncActiveSessionTitle() {
+  const session = getActiveSession();
+  if (!session) return;
+  const preferredTitle = getPreferredSessionTitle();
+  const preferredUrl = currentPage?.url || currentTabInfo?.url || "";
+  if (!preferredTitle) return;
+  const shouldUpdate =
+    !session.messages.length ||
+    isUntitledSession(session.title) ||
+    !session.sourceUrl ||
+    session.sourceUrl === preferredUrl;
+  if (!shouldUpdate) return;
+  session.title = preferredTitle;
+  session.sourceUrl = preferredUrl;
+  session.updatedAt = Date.now();
+  saveSessions();
+  renderActiveTitleOnly();
 }
