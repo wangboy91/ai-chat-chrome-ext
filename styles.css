@@ -250,6 +250,8 @@ button:disabled {
   padding: 14px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  position: relative;
+  z-index: 2;
 }
 
 .panel-title {
@@ -281,7 +283,7 @@ button:disabled {
 
 .page-chip {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: #fbfcfe;
@@ -304,6 +306,19 @@ button:disabled {
   white-space: nowrap;
   font-size: 14px;
   line-height: 1.4;
+}
+
+.composer-select {
+  width: auto;
+  min-width: 110px;
+  max-width: 128px;
+  min-height: 34px;
+  padding: 6px 28px 6px 8px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .history-menu {

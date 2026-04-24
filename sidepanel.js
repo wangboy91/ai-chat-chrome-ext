@@ -1,6 +1,7 @@
 const memoryKey = "pageMemory";
 const sessionsKey = "chatSessions";
 const activeSessionKey = "activeSessionId";
+const sendShortcutKey = "sendShortcut";
 
 let currentPage = null;
 let currentTabInfo = null;
@@ -15,6 +16,7 @@ let language = "en";
 let visionEnabled = false;
 let pageReadState = "idle";
 let pageReadError = "";
+let sendShortcut = "enter";
 
 const ui = {
   zh: {
@@ -50,7 +52,10 @@ const ui = {
     newTitle: "\u65b0\u5efa\u5bf9\u8bdd",
     historyTitle: "\u67e5\u770b\u5386\u53f2\u5bf9\u8bdd",
     refreshTitle: "\u91cd\u65b0\u8bfb\u53d6\u9875\u9762",
-    currentTab: "\u5f53\u524d\u6807\u7b7e\u9875"
+    currentTab: "\u5f53\u524d\u6807\u7b7e\u9875",
+    sendShortcut: "\u53d1\u9001\u5feb\u6377\u952e",
+    enterSend: "\u56de\u8f66\u53d1\u9001",
+    ctrlEnterSend: "Ctrl+Enter \u53d1\u9001"
   },
   en: {
     waiting: "Waiting for current page",
@@ -85,13 +90,17 @@ const ui = {
     newTitle: "New chat",
     historyTitle: "Chat history",
     refreshTitle: "Refresh page content",
-    currentTab: "Current tab"
+    currentTab: "Current tab",
+    sendShortcut: "Send shortcut",
+    enterSend: "Enter to send",
+    ctrlEnterSend: "Ctrl+Enter to send"
   }
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const storedUi = await chrome.storage.local.get("uiLanguage");
+  const storedUi = await chrome.storage.local.get(["uiLanguage", sendShortcutKey]);
   language = storedUi.uiLanguage || "en";
+  sendShortcut = storedUi[sendShortcutKey] || "enter";
   applyLanguage();
   await loadSessions();
   await updateVisionControls();
@@ -101,6 +110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   scheduleRefresh(80);
 
   const prompt = document.getElementById("prompt");
+  document.getElementById("sendShortcutSelect").value = sendShortcut;
   prompt.addEventListener("keydown", handlePromptKeydown);
   prompt.addEventListener("input", autoResizePrompt);
   document.getElementById("refreshPage").addEventListener("click", refreshPageContent);
@@ -113,6 +123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("clearMemory").addEventListener("click", clearMemory);
   document.getElementById("uploadImage").addEventListener("click", () => document.getElementById("imageInput").click());
   document.getElementById("imageInput").addEventListener("change", handleImageUpload);
+  document.getElementById("sendShortcutSelect").addEventListener("change", updateSendShortcut);
   document.getElementById("askForm").addEventListener("submit", askQuestion);
 });
 
@@ -123,6 +134,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     applyLanguage();
     updateMemoryStatus();
     renderActiveSession();
+  }
+  if (changes[sendShortcutKey]) {
+    sendShortcut = changes[sendShortcutKey].newValue || "enter";
+    const shortcutSelect = document.getElementById("sendShortcutSelect");
+    if (shortcutSelect) shortcutSelect.value = sendShortcut;
+    applyLanguage();
   }
   if (changes.modelProfiles || changes.activeModelId) {
     updateVisionControls();
@@ -149,6 +166,10 @@ function applyLanguage() {
   document.getElementById("toggleHistory").title = t("historyTitle");
   document.getElementById("refreshPage").title = t("refreshTitle");
   document.getElementById("pageChipLabel").textContent = t("currentTab");
+  document.getElementById("sendShortcutSelect").title = t("sendShortcut");
+  const shortcutSelect = document.getElementById("sendShortcutSelect");
+  if (shortcutSelect?.options[0]) shortcutSelect.options[0].text = t("enterSend");
+  if (shortcutSelect?.options[1]) shortcutSelect.options[1].text = t("ctrlEnterSend");
   renderPageInfo();
   renderPageChip();
   renderActiveTitleOnly();
@@ -235,7 +256,7 @@ function renderSessionList() {
 
 function renderActiveSession() {
   const session = getActiveSession();
-  document.getElementById("sessionTitle").textContent = getDisplaySessionTitle(session);
+  document.getElementById("sessionTitle").textContent = getHeaderTitle(session);
   const messages = document.getElementById("messages");
   messages.replaceChildren();
   for (const message of session.messages) {
@@ -247,7 +268,7 @@ function renderActiveSession() {
 function renderActiveTitleOnly() {
   const title = document.getElementById("sessionTitle");
   if (!title || !sessions.length) return;
-  title.textContent = getDisplaySessionTitle(getActiveSession());
+  title.textContent = getHeaderTitle(getActiveSession());
 }
 
 function getDisplaySessionTitle(session) {
@@ -255,12 +276,25 @@ function getDisplaySessionTitle(session) {
   return session.title;
 }
 
+function getHeaderTitle(session) {
+  if (!session) return getPreferredSessionTitle();
+  if (!session.messages?.length) return getPreferredSessionTitle();
+  return getDisplaySessionTitle(session);
+}
+
 function isUntitledSession(title) {
   return !title || title === "New chat" || title === "\u65b0\u5bf9\u8bdd";
 }
 
 function handlePromptKeydown(event) {
-  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.key !== "Enter" || event.altKey || event.metaKey) return;
+  if (sendShortcut === "ctrlEnter") {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    document.getElementById("askForm").requestSubmit();
+    return;
+  }
+  if (event.shiftKey || event.ctrlKey || event.metaKey) return;
   event.preventDefault();
   document.getElementById("askForm").requestSubmit();
 }
@@ -269,6 +303,12 @@ function autoResizePrompt(event) {
   const node = event.target;
   node.style.height = "auto";
   node.style.height = `${Math.min(node.scrollHeight, 132)}px`;
+}
+
+async function updateSendShortcut(event) {
+  sendShortcut = event.target.value === "ctrlEnter" ? "ctrlEnter" : "enter";
+  await chrome.storage.local.set({ [sendShortcutKey]: sendShortcut });
+  applyLanguage();
 }
 
 async function refreshPageContent() {

@@ -1,8 +1,10 @@
 const legacyFields = ["protocol", "apiKey", "model", "baseUrl", "maxContextChars"];
+const sendShortcutKey = "sendShortcut";
 let profiles = [];
 let activeModelId = "";
 let editingModelId = "";
 let language = "en";
+let sendShortcut = "enter";
 
 const i18n = {
   zh: {
@@ -28,7 +30,10 @@ const i18n = {
     deleted: "\u6a21\u578b\u5df2\u5220\u9664",
     keepOne: "\u81f3\u5c11\u4fdd\u7559\u4e00\u4e2a\u6a21\u578b",
     opened: "\u4fa7\u8fb9\u680f\u5df2\u6253\u5f00",
-    openFailed: "\u65e0\u6cd5\u6253\u5f00\u4fa7\u8fb9\u680f"
+    openFailed: "\u65e0\u6cd5\u6253\u5f00\u4fa7\u8fb9\u680f",
+    sendShortcut: "\u53d1\u9001\u5feb\u6377\u952e",
+    enterSend: "\u56de\u8f66\u53d1\u9001",
+    ctrlEnterSend: "Ctrl+Enter \u53d1\u9001"
   },
   en: {
     title: "AI Page Chat",
@@ -53,18 +58,24 @@ const i18n = {
     deleted: "Model deleted",
     keepOne: "Keep at least one model",
     opened: "Side panel opened",
-    openFailed: "Could not open side panel"
+    openFailed: "Could not open side panel",
+    sendShortcut: "Send shortcut",
+    enterSend: "Enter to send",
+    ctrlEnterSend: "Ctrl+Enter to send"
   }
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const stored = await chrome.storage.local.get("uiLanguage");
+  const stored = await chrome.storage.local.get(["uiLanguage", sendShortcutKey]);
   language = stored.uiLanguage || "en";
+  sendShortcut = stored[sendShortcutKey] || "enter";
   document.getElementById("language").value = language;
+  document.getElementById("sendShortcut").value = sendShortcut;
   applyLanguage();
   await loadProfiles();
 
   document.getElementById("language").addEventListener("change", changeLanguage);
+  document.getElementById("sendShortcut").addEventListener("change", changeSendShortcut);
   document.getElementById("openSidePanel").addEventListener("click", openSidePanel);
   document.getElementById("toggleConfig").addEventListener("click", toggleConfig);
   document.getElementById("newModel").addEventListener("click", createDraftModel);
@@ -98,9 +109,19 @@ function applyLanguage() {
   document.getElementById("modelLabel").textContent = t("model");
   document.getElementById("contextLabel").textContent = t("context");
   document.getElementById("visionLabel").textContent = t("vision");
+  document.getElementById("sendShortcutLabel").textContent = t("sendShortcut");
+  const shortcutSelect = document.getElementById("sendShortcut");
+  if (shortcutSelect?.options[0]) shortcutSelect.options[0].text = t("enterSend");
+  if (shortcutSelect?.options[1]) shortcutSelect.options[1].text = t("ctrlEnterSend");
   document.getElementById("saveModel").textContent = t("save");
   document.getElementById("activateModel").textContent = t("activate");
   document.getElementById("deleteModel").textContent = t("delete");
+}
+
+async function changeSendShortcut(event) {
+  sendShortcut = event.target.value === "ctrlEnter" ? "ctrlEnter" : "enter";
+  await chrome.storage.local.set({ [sendShortcutKey]: sendShortcut });
+  applyLanguage();
 }
 
 function toggleConfig() {
