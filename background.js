@@ -7,14 +7,6 @@ const DEFAULTS = {
   requestTimeoutMs: 120000
 };
 
-const EXTERNAL_PROVIDERS = {
-  kimi: { name: "Kimi", url: "https://www.kimi.com/" },
-  qianwen: { name: "Qianwen", url: "https://www.qianwen.com/" },
-  doubao: { name: "Doubao", url: "https://www.doubao.com/chat/" },
-  gemini: { name: "Gemini", url: "https://gemini.google.com/app" },
-  chatgpt: { name: "ChatGPT", url: "https://chat.openai.com/chat" }
-};
-
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
 });
@@ -51,13 +43,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "askAIOnce") {
     callAI(request.data, false)
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((error) => sendResponse({ ok: false, error: error.message }));
-    return true;
-  }
-
-  if (request.action === "feedExternalChat") {
-    openExternalChat(request.provider, request.page)
-      .then((result) => sendResponse({ ok: true, ...result }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -459,73 +444,3 @@ function extractAnthropicContent(protocol, json) {
   return "";
 }
 
-async function openExternalChat(providerKey, page) {
-  const provider = EXTERNAL_PROVIDERS[providerKey];
-  if (!provider) {
-    throw new Error("Unsupported third-party AI target.");
-  }
-
-  const pagePayload = page || {};
-  const prompt = buildExternalPrompt(pagePayload);
-  const targetUrl = provider.url;
-  const tab = await openOrFocusProviderTab(provider);
-  await waitForTabReady(tab.id);
-  await fillProviderInput(tab.id, prompt);
-  return { provider: provider.name, url: targetUrl, tabId: tab.id };
-}
-
-function buildExternalPrompt(page) {
-  const parts = [
-    `网页标题: ${page.title || ""}`,
-    `网页地址: ${page.url || ""}`,
-    page.description ? `页面描述: ${page.description}` : "",
-    page.selection ? `选中文本:\n${page.selection}` : "",
-    `页面正文:\n${trimContext(page.content || "", 12000)}`,
-    "",
-    "请基于以上内容进行分析和回答。"
-  ];
-  return parts.filter(Boolean).join("\n\n").trim();
-}
-
-async function openOrFocusProviderTab(provider) {
-  const existingTabs = await chrome.tabs.query({ url: `${provider.url}*` }).catch(() => []);
-  const existing = existingTabs.find((tab) => tab.url && tab.url.startsWith(provider.url));
-  if (existing?.id) {
-    await chrome.tabs.update(existing.id, { active: true });
-    return existing;
-  }
-
-  return chrome.tabs.create({ url: provider.url, active: true });
-}
-
-async function waitForTabReady(tabId, attempts = 40, intervalMs = 500) {
-  for (let index = 0; index < attempts; index += 1) {
-    const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (tab?.status === "complete") return;
-    await delay(intervalMs);
-  }
-}
-
-async function fillProviderInput(tabId, text, attempts = 30, intervalMs = 800) {
-  for (let index = 0; index < attempts; index += 1) {
-    try {
-      let response;
-      try {
-        response = await chrome.tabs.sendMessage(tabId, { action: "fillChatInput", text });
-      } catch {
-        await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
-        response = await chrome.tabs.sendMessage(tabId, { action: "fillChatInput", text });
-      }
-      if (response?.ok) return;
-    } catch {
-      // Keep retrying while the target page is still rendering.
-    }
-    await delay(intervalMs);
-  }
-
-  throw new Error("Opened the target AI site, but could not find its chat input. Try again after the page finishes loading.");
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

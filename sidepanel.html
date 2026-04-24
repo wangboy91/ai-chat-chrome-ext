@@ -17,32 +17,6 @@
       </div>
     </header>
 
-    <section id="pageChip" class="page-chip" hidden>
-      <div class="page-chip-row">
-        <div class="page-chip-copy">
-          <strong id="pageChipTitle">-</strong>
-          <span id="pageChipMeta"></span>
-        </div>
-        <button id="useCurrentPage" class="page-chip-action" type="button">Move here</button>
-      </div>
-      <p id="pageInfo" class="page-chip-info">Waiting for current page</p>
-    </section>
-
-    <section class="external-feed">
-      <div class="external-feed-head">
-        <strong id="externalTitle">Third-party AI</strong>
-        <span id="externalHint">Open a target chat and prefill the current page text.</span>
-      </div>
-      <div class="provider-grid">
-        <button class="provider-button" type="button" data-provider="kimi">Kimi</button>
-        <button class="provider-button" type="button" data-provider="qianwen">Qianwen</button>
-        <button class="provider-button" type="button" data-provider="doubao">Doubao</button>
-        <button class="provider-button" type="button" data-provider="gemini">Gemini</button>
-        <button class="provider-button" type="button" data-provider="chatgpt">ChatGPT</button>
-      </div>
-      <p id="externalStatus" class="external-status"></p>
-    </section>
-
     <aside id="historyMenu" class="history-menu" hidden>
       <div id="historyTitle" class="history-section-title">Recent chats</div>
       <div id="sessionList" class="session-list"></div>
@@ -55,22 +29,35 @@
       <button id="openSettings" class="history-action" type="button">Settings and models</button>
     </aside>
 
-    <main id="messages" class="messages" aria-live="polite"></main>
+    <section id="builtinWorkspace" class="builtin-workspace">
+      <section id="pageChip" class="page-chip" hidden>
+        <div class="page-chip-row">
+          <div class="page-chip-copy">
+            <strong id="pageChipTitle">-</strong>
+            <span id="pageChipMeta"></span>
+          </div>
+          <button id="useCurrentPage" class="page-chip-action" type="button">Move here</button>
+        </div>
+        <p id="pageInfo" class="page-chip-info">Waiting for current page</p>
+      </section>
 
-    <form id="askForm" class="ask-form compact">
-      <div id="shareStrip" class="share-strip" hidden>
-        <img id="shareFavicon" class="share-favicon" alt="" hidden>
-        <span id="shareStatus" class="share-status">Sharing current tab</span>
-        <button id="clearSharedContext" class="share-close" type="button" title="Clear memory">&#215;</button>
-      </div>
-      <div id="attachmentTray" class="attachment-tray" hidden></div>
-      <div class="composer-row">
-        <button id="uploadImage" class="tool-button" type="button" title="Upload image" hidden>+</button>
-        <textarea id="prompt" rows="1" placeholder="Ask this page"></textarea>
-        <button id="askButton" class="send-button" type="submit" title="Send">Send</button>
-      </div>
-      <input id="imageInput" type="file" accept="image/*" multiple hidden>
-    </form>
+      <main id="messages" class="messages" aria-live="polite"></main>
+
+      <form id="askForm" class="ask-form compact">
+        <div id="shareStrip" class="share-strip" hidden>
+          <img id="shareFavicon" class="share-favicon" alt="" hidden>
+          <span id="shareStatus" class="share-status">Sharing current tab</span>
+          <button id="clearSharedContext" class="share-close" type="button" title="Clear memory">&#215;</button>
+        </div>
+        <div id="attachmentTray" class="attachment-tray" hidden></div>
+        <div class="composer-row">
+          <button id="uploadImage" class="tool-button" type="button" title="Upload image" hidden>+</button>
+          <textarea id="prompt" rows="1" placeholder="Ask this page"></textarea>
+          <button id="askButton" class="send-button" type="submit" title="Send">Send</button>
+        </div>
+        <input id="imageInput" type="file" accept="image/*" multiple hidden>
+      </form>
+    </section>
 
     <script src="sidepanel.js"></script>
   </body>

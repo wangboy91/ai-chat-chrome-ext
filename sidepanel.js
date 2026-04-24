@@ -60,12 +60,7 @@ const ui = {
     usePage: "\u79fb\u52a8\u5230\u6b64\u5904",
     shareCurrent: "\u6b63\u5728\u5206\u4eab\u5f53\u524d\u6807\u7b7e\u9875",
     clearShared: "\u6e05\u9664\u5171\u4eab\u8bb0\u5fc6",
-    stop: "\u505c\u6b62",
-    externalTitle: "\u4e09\u65b9 AI \u6295\u5582",
-    externalHint: "\u6253\u5f00\u76ee\u6807 AI \u7ad9\u70b9\uff0c\u5e76\u628a\u5f53\u524d\u9875\u5185\u5bb9\u586b\u5165\u804a\u5929\u6846\u3002",
-    externalOpening: "\u6b63\u5728\u6253\u5f00 {provider} \u5e76\u51c6\u5907\u6295\u5582...",
-    externalOpened: "{provider} \u5df2\u6253\u5f00\uff0c\u5f53\u524d\u9875\u5185\u5bb9\u5df2\u586b\u5165\u804a\u5929\u6846\u3002",
-    externalFailed: "\u65e0\u6cd5\u6295\u5582\u5230 {provider}\uff1a{error}"
+    stop: "\u505c\u6b62"
   },
   en: {
     waiting: "Waiting for current page",
@@ -107,21 +102,8 @@ const ui = {
     usePage: "Move here",
     shareCurrent: "Sharing current tab",
     clearShared: "Clear shared memory",
-    stop: "Stop",
-    externalTitle: "Third-party AI",
-    externalHint: "Open a target chat and prefill the current page text.",
-    externalOpening: "Opening {provider} and preparing the current page feed...",
-    externalOpened: "{provider} opened. The current page content was filled into its chat box.",
-    externalFailed: "Could not feed {provider}: {error}"
+    stop: "Stop"
   }
-};
-
-const externalProviders = {
-  kimi: "Kimi",
-  qianwen: "Qianwen",
-  doubao: "Doubao",
-  gemini: "Gemini",
-  chatgpt: "ChatGPT"
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -153,9 +135,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("uploadImage").addEventListener("click", () => document.getElementById("imageInput").click());
   document.getElementById("imageInput").addEventListener("change", handleImageUpload);
   document.getElementById("askForm").addEventListener("submit", askQuestion);
-  document.querySelectorAll(".provider-button").forEach((button) => {
-    button.addEventListener("click", () => feedExternalProvider(button.dataset.provider || ""));
-  });
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -196,8 +175,6 @@ function applyLanguage() {
   document.getElementById("refreshPage").title = t("refreshTitle");
   document.getElementById("useCurrentPage").textContent = t("usePage");
   document.getElementById("clearSharedContext").title = t("clearShared");
-  document.getElementById("externalTitle").textContent = t("externalTitle");
-  document.getElementById("externalHint").textContent = t("externalHint");
   renderPageInfo();
   renderPageChip();
   renderActiveTitleOnly();
@@ -956,44 +933,6 @@ async function useCurrentPage() {
     await saveSessions();
     renderActiveTitleOnly();
   }
-}
-
-async function feedExternalProvider(providerKey) {
-  const provider = externalProviders[providerKey] || providerKey;
-  setExternalStatus(formatText("externalOpening", { provider }));
-  if (!currentPage) await refreshPageContent();
-  if (!currentPage) {
-    setExternalStatus(formatText("externalFailed", { provider, error: t("noPage") }));
-    return;
-  }
-
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: "feedExternalChat",
-      provider: providerKey,
-      page: currentPage
-    });
-    if (!response?.ok) {
-      throw new Error(response?.error || "Unknown error");
-    }
-    setExternalStatus(formatText("externalOpened", { provider }));
-  } catch (error) {
-    setExternalStatus(formatText("externalFailed", { provider, error: error.message || "Unknown error" }));
-  }
-}
-
-function setExternalStatus(message) {
-  const node = document.getElementById("externalStatus");
-  if (!node) return;
-  node.textContent = message || "";
-}
-
-function formatText(key, values) {
-  let text = t(key);
-  for (const [name, value] of Object.entries(values || {})) {
-    text = text.replaceAll(`{${name}}`, value);
-  }
-  return text;
 }
 
 function renderShareStrip(memory = null) {
