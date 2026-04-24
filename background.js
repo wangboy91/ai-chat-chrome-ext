@@ -7,6 +7,14 @@ const DEFAULTS = {
   requestTimeoutMs: 120000
 };
 
+const EXTERNAL_PROVIDERS = {
+  kimi: { name: "Kimi", url: "https://www.kimi.com/" },
+  qianwen: { name: "Qianwen", url: "https://www.qianwen.com/" },
+  doubao: { name: "Doubao", url: "https://www.doubao.com/chat/" },
+  gemini: { name: "Gemini", url: "https://gemini.google.com/app" },
+  chatgpt: { name: "ChatGPT", url: "https://chat.openai.com/chat" }
+};
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
 });
@@ -46,20 +54,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
+
+  if (request.action === "feedExternalChat") {
+    openExternalChat(request.provider, request.page)
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 });
 
 async function handleAskAI(port, data) {
   try {
-    await callAI(data, true, (chunk) => {
-      port.postMessage({ type: "chunk", chunk });
-    });
+    await callAI(
+      data,
+      true,
+      (chunk) => {
+        port.postMessage({ type: "chunk", chunk });
+      },
+      () => {
+        port.postMessage({ type: "activity" });
+      }
+    );
     port.postMessage({ type: "done" });
   } catch (error) {
     port.postMessage({ type: "error", error: error.message || "Request failed" });
   }
 }
 
-async function callAI(data, stream, onChunk) {
+async function callAI(data, stream, onChunk, onActivity) {
   const config = { ...DEFAULTS, ...data };
   validateConfig(config);
 
@@ -108,7 +130,7 @@ async function callAI(data, stream, onChunk) {
       return text;
     }
 
-    await readStream(protocol, response, onChunk);
+    await readStream(protocol, response, onChunk, onActivity);
     return "";
   } finally {
     clearTimeout(timeoutId);
@@ -268,11 +290,12 @@ function extractText(protocol, json) {
   return json.choices?.[0]?.message?.content || "";
 }
 
-async function readStream(protocol, response, onChunk) {
+async function readStream(protocol, response, onChunk, onActivity) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let emitted = false;
+  let sawActivity = false;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -280,51 +303,77 @@ async function readStream(protocol, response, onChunk) {
       break;
     }
 
+    if (value?.length) {
+      sawActivity = true;
+      onActivity?.();
+    }
+
     buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    let newlineIndex = buffer.indexOf("\n");
-    while (newlineIndex >= 0) {
-      const line = buffer.slice(0, newlineIndex);
-      buffer = buffer.slice(newlineIndex + 1);
-      const chunk = parseStreamFrame(protocol, line);
-      if (chunk) {
-        emitted = true;
-        onChunk(chunk);
+    let frameIndex = buffer.indexOf("\n\n");
+    while (frameIndex >= 0) {
+      const frame = buffer.slice(0, frameIndex);
+      buffer = buffer.slice(frameIndex + 2);
+      const parsed = parseStreamFrame(protocol, frame);
+      if (parsed.activity) {
+        sawActivity = true;
+        onActivity?.();
       }
-      newlineIndex = buffer.indexOf("\n");
+      if (parsed.text) {
+        emitted = true;
+        onChunk(parsed.text);
+      }
+      frameIndex = buffer.indexOf("\n\n");
     }
   }
 
   buffer += decoder.decode();
   const tail = parseStreamFrame(protocol, buffer);
-  if (tail) {
+  if (tail.activity) {
+    sawActivity = true;
+    onActivity?.();
+  }
+  if (tail.text) {
     emitted = true;
-    onChunk(tail);
+    onChunk(tail.text);
   }
 
   if (!emitted && buffer.trim()) {
     const text = parsePossibleJsonText(protocol, buffer);
     if (text) {
       onChunk(text);
+      emitted = true;
     }
+  }
+
+  if (!emitted && !sawActivity && buffer.trim()) {
+    throw new Error("The model endpoint returned data, but it could not be parsed as a stream.");
   }
 }
 
 function parseStreamFrame(protocol, raw) {
-  const trimmed = (raw || "").trim();
+  const normalized = String(raw || "").replace(/\r\n/g, "\n");
+  const trimmed = normalized.trim();
   if (!trimmed) {
-    return "";
+    return { text: "", activity: false };
   }
 
-  const dataLines = trimmed
+  const lines = trimmed
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => line.replace(/\r$/, ""))
+    .filter(Boolean);
+  const dataLines = lines
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).trim());
 
-  const jsonLines = dataLines.length ? dataLines : trimmed.split("\n").map((line) => line.trim());
+  const jsonLines = dataLines.length ? dataLines : lines.map((line) => line.trim());
   let output = "";
+  let activity = false;
   for (const line of jsonLines) {
-    if (!line || line === "[DONE]") {
+    if (!line) {
+      continue;
+    }
+    activity = true;
+    if (line === "[DONE]") {
       continue;
     }
 
@@ -332,11 +381,13 @@ function parseStreamFrame(protocol, raw) {
       const json = JSON.parse(line);
       output += extractStreamText(protocol, json);
     } catch {
-      // Ignore incomplete stream fragments; the next read usually completes them.
+      if (dataLines.length === 0 && !line.startsWith("event:") && !line.startsWith(":")) {
+        output += line;
+      }
     }
   }
 
-  return output;
+  return { text: output, activity };
 }
 
 function parsePossibleJsonText(protocol, raw) {
@@ -406,4 +457,75 @@ function extractAnthropicContent(protocol, json) {
   }
 
   return "";
+}
+
+async function openExternalChat(providerKey, page) {
+  const provider = EXTERNAL_PROVIDERS[providerKey];
+  if (!provider) {
+    throw new Error("Unsupported third-party AI target.");
+  }
+
+  const pagePayload = page || {};
+  const prompt = buildExternalPrompt(pagePayload);
+  const targetUrl = provider.url;
+  const tab = await openOrFocusProviderTab(provider);
+  await waitForTabReady(tab.id);
+  await fillProviderInput(tab.id, prompt);
+  return { provider: provider.name, url: targetUrl, tabId: tab.id };
+}
+
+function buildExternalPrompt(page) {
+  const parts = [
+    `网页标题: ${page.title || ""}`,
+    `网页地址: ${page.url || ""}`,
+    page.description ? `页面描述: ${page.description}` : "",
+    page.selection ? `选中文本:\n${page.selection}` : "",
+    `页面正文:\n${trimContext(page.content || "", 12000)}`,
+    "",
+    "请基于以上内容进行分析和回答。"
+  ];
+  return parts.filter(Boolean).join("\n\n").trim();
+}
+
+async function openOrFocusProviderTab(provider) {
+  const existingTabs = await chrome.tabs.query({ url: `${provider.url}*` }).catch(() => []);
+  const existing = existingTabs.find((tab) => tab.url && tab.url.startsWith(provider.url));
+  if (existing?.id) {
+    await chrome.tabs.update(existing.id, { active: true });
+    return existing;
+  }
+
+  return chrome.tabs.create({ url: provider.url, active: true });
+}
+
+async function waitForTabReady(tabId, attempts = 40, intervalMs = 500) {
+  for (let index = 0; index < attempts; index += 1) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (tab?.status === "complete") return;
+    await delay(intervalMs);
+  }
+}
+
+async function fillProviderInput(tabId, text, attempts = 30, intervalMs = 800) {
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      let response;
+      try {
+        response = await chrome.tabs.sendMessage(tabId, { action: "fillChatInput", text });
+      } catch {
+        await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+        response = await chrome.tabs.sendMessage(tabId, { action: "fillChatInput", text });
+      }
+      if (response?.ok) return;
+    } catch {
+      // Keep retrying while the target page is still rendering.
+    }
+    await delay(intervalMs);
+  }
+
+  throw new Error("Opened the target AI site, but could not find its chat input. Try again after the page finishes loading.");
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -9,6 +9,7 @@ let activePort = null;
 let activeRequestTimer = null;
 let activeHardTimeout = null;
 let pendingRefreshTimer = null;
+let isStopping = false;
 let sessions = [];
 let activeSessionId = "";
 let attachments = [];
@@ -58,7 +59,13 @@ const ui = {
     ctrlEnterSend: "Ctrl+Enter \u53d1\u9001",
     usePage: "\u79fb\u52a8\u5230\u6b64\u5904",
     shareCurrent: "\u6b63\u5728\u5206\u4eab\u5f53\u524d\u6807\u7b7e\u9875",
-    clearShared: "\u6e05\u9664\u5171\u4eab\u8bb0\u5fc6"
+    clearShared: "\u6e05\u9664\u5171\u4eab\u8bb0\u5fc6",
+    stop: "\u505c\u6b62",
+    externalTitle: "\u4e09\u65b9 AI \u6295\u5582",
+    externalHint: "\u6253\u5f00\u76ee\u6807 AI \u7ad9\u70b9\uff0c\u5e76\u628a\u5f53\u524d\u9875\u5185\u5bb9\u586b\u5165\u804a\u5929\u6846\u3002",
+    externalOpening: "\u6b63\u5728\u6253\u5f00 {provider} \u5e76\u51c6\u5907\u6295\u5582...",
+    externalOpened: "{provider} \u5df2\u6253\u5f00\uff0c\u5f53\u524d\u9875\u5185\u5bb9\u5df2\u586b\u5165\u804a\u5929\u6846\u3002",
+    externalFailed: "\u65e0\u6cd5\u6295\u5582\u5230 {provider}\uff1a{error}"
   },
   en: {
     waiting: "Waiting for current page",
@@ -99,8 +106,22 @@ const ui = {
     ctrlEnterSend: "Ctrl+Enter to send",
     usePage: "Move here",
     shareCurrent: "Sharing current tab",
-    clearShared: "Clear shared memory"
+    clearShared: "Clear shared memory",
+    stop: "Stop",
+    externalTitle: "Third-party AI",
+    externalHint: "Open a target chat and prefill the current page text.",
+    externalOpening: "Opening {provider} and preparing the current page feed...",
+    externalOpened: "{provider} opened. The current page content was filled into its chat box.",
+    externalFailed: "Could not feed {provider}: {error}"
   }
+};
+
+const externalProviders = {
+  kimi: "Kimi",
+  qianwen: "Qianwen",
+  doubao: "Doubao",
+  gemini: "Gemini",
+  chatgpt: "ChatGPT"
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -116,9 +137,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   scheduleRefresh(80);
 
   const prompt = document.getElementById("prompt");
-  document.getElementById("sendShortcutSelect").value = sendShortcut;
   prompt.addEventListener("keydown", handlePromptKeydown);
   prompt.addEventListener("input", autoResizePrompt);
+  document.getElementById("shareFavicon").addEventListener("error", handleShareFaviconError);
   document.getElementById("refreshPage").addEventListener("click", refreshPageContent);
   document.getElementById("newSession").addEventListener("click", newSession);
   document.getElementById("toggleHistory").addEventListener("click", toggleHistory);
@@ -131,8 +152,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("useCurrentPage").addEventListener("click", useCurrentPage);
   document.getElementById("uploadImage").addEventListener("click", () => document.getElementById("imageInput").click());
   document.getElementById("imageInput").addEventListener("change", handleImageUpload);
-  document.getElementById("sendShortcutSelect").addEventListener("change", updateSendShortcut);
   document.getElementById("askForm").addEventListener("submit", askQuestion);
+  document.querySelectorAll(".provider-button").forEach((button) => {
+    button.addEventListener("click", () => feedExternalProvider(button.dataset.provider || ""));
+  });
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -145,8 +168,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
   if (changes[sendShortcutKey]) {
     sendShortcut = changes[sendShortcutKey].newValue || "enter";
-    const shortcutSelect = document.getElementById("sendShortcutSelect");
-    if (shortcutSelect) shortcutSelect.value = sendShortcut;
     applyLanguage();
   }
   if (changes.modelProfiles || changes.activeModelId) {
@@ -169,18 +190,14 @@ function applyLanguage() {
   document.getElementById("memoryTitle").textContent = t("memory");
   document.getElementById("prompt").placeholder = t("ask");
   document.getElementById("uploadImage").title = t("uploadTitle");
-  document.getElementById("askButton").textContent = "\u27a4";
-  document.getElementById("askButton").title = t("send");
-  document.getElementById("askButton").setAttribute("aria-label", t("send"));
+  syncAskButtonState();
   document.getElementById("newSession").title = t("newTitle");
   document.getElementById("toggleHistory").title = t("historyTitle");
   document.getElementById("refreshPage").title = t("refreshTitle");
   document.getElementById("useCurrentPage").textContent = t("usePage");
   document.getElementById("clearSharedContext").title = t("clearShared");
-  document.getElementById("sendShortcutSelect").title = t("sendShortcut");
-  const shortcutSelect = document.getElementById("sendShortcutSelect");
-  if (shortcutSelect?.options[0]) shortcutSelect.options[0].text = t("enterSend");
-  if (shortcutSelect?.options[1]) shortcutSelect.options[1].text = t("ctrlEnterSend");
+  document.getElementById("externalTitle").textContent = t("externalTitle");
+  document.getElementById("externalHint").textContent = t("externalHint");
   renderPageInfo();
   renderPageChip();
   renderActiveTitleOnly();
@@ -316,12 +333,6 @@ function autoResizePrompt(event) {
   node.style.height = `${Math.min(node.scrollHeight, 132)}px`;
 }
 
-async function updateSendShortcut(event) {
-  sendShortcut = event.target.value === "ctrlEnter" ? "ctrlEnter" : "enter";
-  await chrome.storage.local.set({ [sendShortcutKey]: sendShortcut });
-  applyLanguage();
-}
-
 async function refreshPageContent() {
   setPageState("reading");
   try {
@@ -358,6 +369,10 @@ async function readPageFromTab(tab) {
 
 async function askQuestion(event) {
   event.preventDefault();
+  if (document.getElementById("askButton").dataset.mode === "stop") {
+    stopActiveResponse();
+    return;
+  }
   const promptNode = document.getElementById("prompt");
   const prompt = promptNode.value.trim();
   if (!prompt && !attachments.length) return;
@@ -538,11 +553,19 @@ function renderAttachments() {
 
 function streamAnswer(data, node) {
   if (activePort) activePort.disconnect();
+  isStopping = false;
   let hasChunk = false;
+  let hasActivity = false;
   let markdown = "";
   activePort = chrome.runtime.connect({ name: "ai-page-chat" });
   activePort.onMessage.addListener((message) => {
+    if (message.type === "activity") {
+      hasActivity = true;
+      resetStreamFallbackTimer(data, node, hasChunk, hasActivity, markdown);
+      return;
+    }
     if (message.type === "chunk") {
+      hasActivity = true;
       if (!hasChunk) {
         node.classList.remove("pending");
         hasChunk = true;
@@ -550,6 +573,7 @@ function streamAnswer(data, node) {
       markdown += message.chunk;
       renderMessage(node, markdown, true);
       scrollMessagesToBottom();
+      resetStreamFallbackTimer(data, node, hasChunk, hasActivity, markdown);
       return;
     }
     if (message.type === "error") {
@@ -566,22 +590,19 @@ function streamAnswer(data, node) {
     }
   });
   activePort.onDisconnect.addListener(() => {
-    if (document.getElementById("askButton").disabled) {
-      renderMessage(node, hasChunk ? markdown : t("closed"), true);
+    if (document.getElementById("askButton").dataset.mode === "stop") {
+      if (isStopping) {
+        node.classList.remove("pending");
+        finishStream();
+        return;
+      }
+      renderMessage(node, hasChunk ? markdown : (hasActivity ? t("timeout") : t("closed")), true);
       node.classList.remove("pending");
       finishStream();
     }
   });
   activePort.postMessage({ action: "askAI", data });
-  activeRequestTimer = window.setTimeout(() => {
-    if (!hasChunk && node.isConnected && activePort) {
-      renderMessage(node, t("fallback"), true);
-      const portToClose = activePort;
-      activePort = null;
-      portToClose.disconnect();
-      callNonStreamingFallback(data, node);
-    }
-  }, 20000);
+  resetStreamFallbackTimer(data, node, hasChunk, hasActivity, markdown);
   activeHardTimeout = window.setTimeout(() => {
     if (document.getElementById("askButton").disabled && node.isConnected) {
       renderMessage(node, hasChunk ? markdown : t("timeout"), true);
@@ -591,13 +612,26 @@ function streamAnswer(data, node) {
   }, 125000);
 }
 
-async function callNonStreamingFallback(data, node) {
+function resetStreamFallbackTimer(data, node, hasChunk, hasActivity, markdown) {
+  clearActiveRequestTimer();
+  const fallbackDelay = hasActivity ? 45000 : 30000;
+  activeRequestTimer = window.setTimeout(() => {
+    if (!node.isConnected || !activePort || hasChunk) return;
+    renderMessage(node, hasActivity ? t("waitingChunk") : t("fallback"), true);
+    const portToClose = activePort;
+    activePort = null;
+    portToClose.disconnect();
+    callNonStreamingFallback(data, node, markdown);
+  }, fallbackDelay);
+}
+
+async function callNonStreamingFallback(data, node, existingMarkdown = "") {
   try {
     const response = await chrome.runtime.sendMessage({ action: "askAIOnce", data });
     if (!response?.ok) {
       throw new Error(response?.error || t("noStream"));
     }
-    const text = response.result || t("noStream");
+    const text = response.result || existingMarkdown || t("noStream");
     renderMessage(node, text, true);
     node.classList.remove("pending");
     persistMessage("assistant", text);
@@ -610,6 +644,7 @@ async function callNonStreamingFallback(data, node) {
 }
 
 function finishStream() {
+  isStopping = false;
   setBusy(false);
   clearActiveRequestTimer();
   clearActiveHardTimeout();
@@ -762,7 +797,14 @@ function scrollMessagesToBottom() {
 }
 
 function setBusy(isBusy) {
-  document.getElementById("askButton").disabled = isBusy;
+  const askButton = document.getElementById("askButton");
+  const prompt = document.getElementById("prompt");
+  const uploadImage = document.getElementById("uploadImage");
+  askButton.disabled = false;
+  askButton.dataset.mode = isBusy ? "stop" : "send";
+  prompt.disabled = isBusy;
+  if (uploadImage) uploadImage.disabled = isBusy;
+  syncAskButtonState();
 }
 
 function clearActiveRequestTimer() {
@@ -822,7 +864,8 @@ function makeTabInfo(tab, page = null) {
     title: page?.title || tab.title || "",
     url,
     host,
-    status: tab.status || "complete"
+    status: tab.status || "complete",
+    favIconUrl: tab.favIconUrl || ""
   };
 }
 
@@ -915,10 +958,49 @@ async function useCurrentPage() {
   }
 }
 
+async function feedExternalProvider(providerKey) {
+  const provider = externalProviders[providerKey] || providerKey;
+  setExternalStatus(formatText("externalOpening", { provider }));
+  if (!currentPage) await refreshPageContent();
+  if (!currentPage) {
+    setExternalStatus(formatText("externalFailed", { provider, error: t("noPage") }));
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: "feedExternalChat",
+      provider: providerKey,
+      page: currentPage
+    });
+    if (!response?.ok) {
+      throw new Error(response?.error || "Unknown error");
+    }
+    setExternalStatus(formatText("externalOpened", { provider }));
+  } catch (error) {
+    setExternalStatus(formatText("externalFailed", { provider, error: error.message || "Unknown error" }));
+  }
+}
+
+function setExternalStatus(message) {
+  const node = document.getElementById("externalStatus");
+  if (!node) return;
+  node.textContent = message || "";
+}
+
+function formatText(key, values) {
+  let text = t(key);
+  for (const [name, value] of Object.entries(values || {})) {
+    text = text.replaceAll(`{${name}}`, value);
+  }
+  return text;
+}
+
 function renderShareStrip(memory = null) {
   const strip = document.getElementById("shareStrip");
   const status = document.getElementById("shareStatus");
-  if (!strip || !status) return;
+  const favicon = document.getElementById("shareFavicon");
+  if (!strip || !status || !favicon) return;
   const pages = Array.isArray(memory) ? memory : [];
   const currentTitle = currentPage?.title || currentTabInfo?.title;
   const label = currentTitle
@@ -926,5 +1008,40 @@ function renderShareStrip(memory = null) {
     : t("shareCurrent");
   const extra = pages.length ? ` + ${pages.length} ${t("pages")}` : "";
   status.textContent = `${label}${extra}`;
+  const iconUrl = currentTabInfo?.favIconUrl || "";
+  if (iconUrl) {
+    favicon.src = iconUrl;
+    favicon.hidden = false;
+  } else {
+    favicon.removeAttribute("src");
+    favicon.hidden = true;
+  }
   strip.hidden = !currentTitle && !pages.length;
+}
+
+function stopActiveResponse() {
+  if (!activePort) return;
+  isStopping = true;
+  clearActiveRequestTimer();
+  clearActiveHardTimeout();
+  activePort.disconnect();
+  activePort = null;
+  finishStream();
+}
+
+function syncAskButtonState() {
+  const askButton = document.getElementById("askButton");
+  if (!askButton) return;
+  const isStop = askButton.dataset.mode === "stop";
+  askButton.textContent = isStop ? t("stop") : "\u27a4";
+  askButton.title = isStop ? t("stop") : t("send");
+  askButton.setAttribute("aria-label", isStop ? t("stop") : t("send"));
+  askButton.classList.toggle("is-stop", isStop);
+}
+
+function handleShareFaviconError() {
+  const favicon = document.getElementById("shareFavicon");
+  if (!favicon) return;
+  favicon.removeAttribute("src");
+  favicon.hidden = true;
 }
